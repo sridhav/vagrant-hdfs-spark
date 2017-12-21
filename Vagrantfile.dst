@@ -1,0 +1,41 @@
+aws_access_key = "#aws_access_key#"
+aws_secret_key = "#aws_secret_key#"
+aws_keypair = "#aws_keypair#"
+hostname = "#hostname#"
+ipaddr = "#ipaddr#"
+nodes = "#nodes#"
+
+node_count = nodes.to_i
+
+ip_end = ipaddr.split(".")[3].to_i
+ip_split = ipaddr.split(".")
+ip_split.pop
+host_split = hostname.split(".")
+short_name = host_split.shift
+
+node_list = Hash.new
+master=Hash.new
+master["hostname"] = hostname
+master["ipaddr"] = ipaddr
+master["shortname"] = short_name
+node_list["master"] = master
+
+
+for i in 1..node_count do 
+    node = Hash.new
+    node["hostname"] = short_name + i.to_s + "." + host_split.join(".")
+    node["shortname"] = short_name+i . to_s
+    ip_end = ip_end+1
+    node["ipaddr"] = ip_split.join(".") + "." +ip_end.to_s
+    node_list["slave"+i.to_s] = node
+end
+
+Vagrant.configure("2") do |config|
+    config.vm.box = "centos/7"
+    node_list.each do |key, node|
+        config.vm.define key do |nodeconfig|
+            nodeconfig.vm.hostname = node["hostname"]
+            nodeconfig.vm.network :private_network, ip: node["ipaddr"]
+        end
+    end
+end

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+
+generate_keys() {
+    if [ ! -d ./keys ]; then
+        mkdir ./keys
+    fi
+
+    if [ ! -f ./keys/id_rsa ] || [ ! -f ./keys/id_rsa.pub ]; then
+        rm -rf ./keys/*
+        ssh-keygen -b 2048 -t rsa -f ./keys/id_rsa -q -N ""
+    fi
+}
+
+
+vagrant_gen() {
+    if [ -f Vagrantfile ]; then
+        echo "Vagrant file already exists. Delete it to generate a new one";
+    else
+        sed_opt="-i"
+        if [ `uname` == "Darwin" ]; then 
+            sed_opt="-i.bak"
+        fi
+        sed "s/#nodes#/$NODE_COUNT/g" Vagrantfile.dst > Vagrantfile
+        sed $sed_opt "s/#ipaddr#/$IP_ADDR/g" Vagrantfile
+        sed $sed_opt "s/#hostname#/$HOST_NAME/g" Vagrantfile
+        sed $sed_opt "s/#aws_access_key#/$AWS_ACCESS_KEY_ID/g" Vagrantfile
+        sed $sed_opt "s/#aws_secret_key#/$AWS_SECRET_ACCESS_KEY_ID/g" Vagrantfile
+        sed $sed_opt "s/#aws_keypair#/$AWS_KEYPAIR_NAME/g" Vagrantfile
+        if [ `uname` == "Darwin" ]; then 
+            rm -rf Vagrantfile.bak
+        fi
+    fi
+}
+
+# OPTS=`getopt -o ki:t:h:a:b:c: --long keys,ipaddr:,nodes:,hostname:,aws-access-key:,aws-secret-key:,aws-key-pair: $*`
+# if [ $? != 0 ] ; then echo "Failed parsing options." >&2 ; exit 1 ; fi
+
+# echo $OPTS
+# eval set -- "$OPTS"
+
+NODE_COUNT="2"
+HOST_NAME="hadoop-spark.box"
+IP_ADDR="192.168.10.0"
+AWS_ACCESS_KEY_ID=""
+AWS_SECRET_ACCESS_KEY=""
+AWS_KEYPAIR_NAME=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -i|--ipaddr)
+        if [[ $2 =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+            IP_ADDR=$2
+        else
+            echo "Invalid starting ip using default"
+        fi
+        shift 2;
+      ;;
+    -t|--nodes) 
+        if [[ $2 =~ ^[0-9]+$ ]]; then
+            NODE_COUNT=$2
+        else
+            echo "Invalid node count using default"
+        fi
+        shift 2;
+      ;;
+    -h|--hostname)
+        if [[ $2 =~ ^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$ ]]; then
+            HOST_NAME=$2
+        else
+            echo "Invalid host name using default"
+        fi
+        shift 2;
+      ;;
+    -a|--aws-access-key)
+        AWS_ACCESS_KEY_ID=$2;  
+        shift 2;
+      ;;
+    -b|--aws-secret-key)
+        AWS_SECRET_ACCESS_KEY=$2
+        shift 2;
+      ;;
+    -c|--aws-key-pair)
+        AWS_KEYPAIR_NAME=$2
+        shift 2;
+      ;;
+    -k|--keys)
+        rm -rf ./keys/*
+        shift;
+      ;;
+    *)  echo "Usage: ./run.sh [-i] <start_ip> [-n] <node_count> [-h] <host_name> -a -k"
+         echo "-i|--ipaddr <start ip> this will be the master node ip. slaves will use the incremented number"
+         echo "-n|--nodes <node_count> total number of slaves to be built other than master."
+         echo "-h|--hostname <host_name> this hostname will be the master node. slaves will use the incremented number"
+         echo "-k|--keys will regenerate ssh keys"
+         echo "-a|--aws-access-key <key> AWS generated access key"
+         echo "-b|--aws-secret-key <key> AWS generated secret key"
+         echo "-c|--aws-key-pair <keypair> AWS created ssh key pair name"
+         break;
+      ;;
+  esac
+done
+
+generate_keys
+vagrant_gen
