@@ -1,3 +1,7 @@
 .vagrant
 keys
 Vagrantfile
+hdfs/xml
+hdfs/install.sh
+hosts/
+resources

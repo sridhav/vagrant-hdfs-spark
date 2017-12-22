@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+yum -y install wget java-1.8.0-openjdk-devel.x86_64
+
+SCRIPT=`realpath -s $0`
+SCRIPTPATH=`dirname $SCRIPT`
+
+groupadd hadoop
+adduser -m -g hadoop hadoop
+usermod -aG wheel hadoop
+echo "hadoop" | passwd --stdin hadoop
+
+cat $SCRIPTPATH/bashrc_exports >> /home/hadoop/.bashrc
+chown -R hadoop:hadoop /home/hadoop/.bashrc
+
+cd /opt
+tar -xvzf $SCRIPTPATH/../resources/hadoop.tar.gz
+chown -R hadoop:hadoop hadoop-2.7.3
+
+
+cat $SCRIPTPATH/xml/core-site.xml > /opt/hadoop-2.7.3/etc/hadoop/core-site.xml
+cat $SCRIPTPATH/xml/hdfs-site.xml > /opt/hadoop-2.7.3/etc/hadoop/hdfs-site.xml
+cat $SCRIPTPATH/xml/mapred-site.xml > /opt/hadoop-2.7.3/etc/hadoop/mapred-site.xml
+cat $SCRIPTPATH/xml/yarn-site.xml > /opt/hadoop-2.7.3/etc/hadoop/yarn-site.xml
+
+cat $SCRIPTPATH/../hosts/main > /etc/hosts
+cat $SCRIPTPATH/../hosts/master > /opt/hadoop-2.7.3/etc/hadoop/masters
+cat $SCRIPTPATH/../hosts/slaves > /opt/hadoop-2.7.3/etc/hadoop/slaves
+
+if [ ! -d /data ]; then
+    mkdir -p /data
+    chown -R hadoop:hadoop /data
+fi
+
+sed -i "s/enforcing/disabled/g" /etc/sysconfig/selinux
+
+if [ "`hostname -f`" == "#hostname#" ]; then
+    su - hadoop -c "/opt/hadoop-2.7.3/bin/hadoop namenode -format"
+fi

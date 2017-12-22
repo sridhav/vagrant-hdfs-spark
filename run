@@ -8,10 +8,31 @@ generate_keys() {
 
     if [ ! -f ./keys/id_rsa ] || [ ! -f ./keys/id_rsa.pub ]; then
         rm -rf ./keys/*
-        ssh-keygen -b 2048 -t rsa -f ./keys/id_rsa -q -N ""
+        ssh-keygen -b 2048 -t rsa -f ./keys/id_rsa -q -N "" -C "hadoop"
     fi
 }
 
+install_vagrant_plugins() {
+    vagrant plugin install vagrant-triggers
+    vagrant plugin install vagrant-vbguest
+}
+
+download_resources() {
+    if [ ! -d resources ]; then
+        mkdir -p resources
+    fi
+    if [ ! -f resources/hadoop.tar.gz ]; then
+        curl -f0 -o resources/hadoop.tar.gz https://archive.apache.org/dist/hadoop/core/hadoop-2.7.3/hadoop-2.7.3.tar.gz
+    else
+        echo "hadoop.tar.gz already exists. Delete it to generate a new one";
+    fi
+    if [ ! -f resources/spark.tgz ]; then
+        curl -f0 -o resources/spark.tgz http://mirrors.gigenet.com/apache/spark/spark-2.2.1/spark-2.2.1-bin-hadoop2.7.tgz
+    else
+        echo "hadoop.tar.gz already exists. Delete it to generate a new one";
+    fi
+
+}
 
 vagrant_gen() {
     if [ -f Vagrantfile ]; then
@@ -30,6 +51,40 @@ vagrant_gen() {
         if [ `uname` == "Darwin" ]; then 
             rm -rf Vagrantfile.bak
         fi
+         
+    fi
+}
+
+hdfs_conf_gen() {
+    if [ ! -d hdfs/xml ]; then
+        mkdir -p hdfs/xml
+    fi
+    if [ -f hdfs/xml/core-site.xml ]; then
+        echo "core-site.xml already exists. Delete it to generate a new one";
+    else
+        sed "s/#hostname#/$HOST_NAME/g" hdfs/dst/core-site.xml.dst > hdfs/xml/core-site.xml
+    fi
+    if [ -f hdfs/xml/hdfs-site.xml ]; then
+        echo "hdfs-site.xml already exists. Delete it to generate a new one";
+    else
+        cat hdfs/dst/hdfs-site.xml.dst > hdfs/xml/hdfs-site.xml
+    fi
+    if [ -f hdfs/xml/mapred-site.xml ]; then
+        echo "mapred-site.xml already exists. Delete it to generate a new one";
+    else
+        cat hdfs/dst/mapred-site.xml.dst > hdfs/xml/mapred-site.xml
+    fi
+    if [ -f hdfs/xml/yarn-site.xml ]; then
+        echo "yarn-site.xml already exists. Delete it to generate a new one";
+    else
+        cat hdfs/dst/yarn-site.xml.dst > hdfs/xml/yarn-site.xml
+    fi
+
+    if [ -f hdfs/install.sh ]; then 
+        echo "install.sh already exists. Delete it to generate a new one";
+    else
+        sed "s/#hostname#/$HOST_NAME/g" hdfs/install.sh.dst > hdfs/install.sh
+        chmod +x hdfs/install.sh
     fi
 }
 
@@ -41,7 +96,7 @@ vagrant_gen() {
 
 NODE_COUNT="2"
 HOST_NAME="hadoop-spark.box"
-IP_ADDR="192.168.10.0"
+IP_ADDR="192.168.10.10"
 AWS_ACCESS_KEY_ID=""
 AWS_SECRET_ACCESS_KEY=""
 AWS_KEYPAIR_NAME=""
@@ -102,4 +157,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 generate_keys
+download_resources
 vagrant_gen
+hdfs_conf_gen
+vagrant up

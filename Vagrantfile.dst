@@ -14,12 +14,6 @@ host_split = hostname.split(".")
 short_name = host_split.shift
 
 node_list = Hash.new
-master=Hash.new
-master["hostname"] = hostname
-master["ipaddr"] = ipaddr
-master["shortname"] = short_name
-node_list["master"] = master
-
 
 for i in 1..node_count do 
     node = Hash.new
@@ -30,12 +24,91 @@ for i in 1..node_count do
     node_list["slave"+i.to_s] = node
 end
 
+master=Hash.new
+master["hostname"] = hostname
+master["ipaddr"] = ipaddr
+master["shortname"] = short_name
+node_list["master"] = master
+
+Dir.mkdir('hosts') unless Dir.exist?('hosts')
+unless File.exists?('hosts/main')
+    open('hosts/main', 'a') do |f|
+        node_list.each do |key, node|
+            f.puts node["ipaddr"] + "\t" + node["hostname"]
+        end
+    end
+end
+
+unless File.exists?('hosts/master')
+    open('hosts/master', 'a') do |f|
+        f.puts node_list["master"]["hostname"]
+    end
+end
+
+unless File.exists?('hosts/slaves')
+    open('hosts/slaves', 'a') do |f|
+        node_list.each do |key, node|
+            unless key == "master" 
+                f.puts node["hostname"]
+            end
+        end
+    end
+end
+
+
+$hdfs_install = <<SCRIPT
+    chmod +x /vagrant/hdfs/install.sh
+    /vagrant/hdfs/install.sh
+SCRIPT
+
+$spark_install = <<SCRIPT
+    chmod +x /vagrant/spark/install.sh
+    /vagrant/spark/install.sh
+SCRIPT
+
+$hdfs_run = <<SCRIPT
+    chmod +x /vagrant/hdfs/run.sh
+SCRIPT
+
+$key_install = <<SCRIPT
+    mkdir -p /home/hadoop/.ssh
+    cat /vagrant/keys/id_rsa.pub >> /home/hadoop/.ssh/authorized_keys
+    cat /vagrant/keys/id_rsa.pub > /home/hadoop/.ssh/id_rsa.pub
+    cat /vagrant/keys/id_rsa > /home/hadoop/.ssh/id_rsa
+    echo "UserKnownHostsFile=/dev/null" >> /home/hadoop/.ssh/config
+    echo "StrictHostKeyChecking=no" >> /home/hadoop/.ssh/config
+    chown -R hadoop:hadoop /home/hadoop
+    chmod -R 700 /home/hadoop/.ssh
+    chmod -R 600 /home/hadoop/.ssh/*
+SCRIPT
+
 Vagrant.configure("2") do |config|
     config.vm.box = "centos/7"
+    config.vbguest.auto_update = false
+    config.vm.provision "shell", inline: $hdfs_install
+    config.vm.provision "shell", inline: $spark_install
+    config.vm.provision "shell", inline: $key_install
+    
     node_list.each do |key, node|
         config.vm.define key do |nodeconfig|
             nodeconfig.vm.hostname = node["hostname"]
             nodeconfig.vm.network :private_network, ip: node["ipaddr"]
+            nodeconfig.vm.provider "virtualbox" do |v|
+                v.cpus=2
+                v.memory=1024
+                v.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+            end
+            if key == "master"
+                nodeconfig.vm.provision "shell", inline: "chmod +x /vagrant/hdfs/run.sh && /vagrant/hdfs/run.sh", run: "always"    
+                nodeconfig.vm.provision "shell", inline: "chmod +x /vagrant/spark/run.sh && /vagrant/spark/run.sh", run: "always"
+            end
         end
+    end
+    
+    config.trigger.after :destroy do
+        run "rm -rf hdfs/xml"
+        run "rm -rf hosts"
+        run "rm -rf keys"
+        run "rm -rf hdfs/install.sh"
     end
 end
